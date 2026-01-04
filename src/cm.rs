@@ -501,6 +501,9 @@ impl<'a, 'o, 'c, 'w> CommonMarkFormatter<'a, 'o, 'c, 'w> {
             NodeValue::EscapedTag(net) => self.format_escaped_tag(net)?,
             NodeValue::Alert(ref alert) => self.format_alert(alert, entering)?,
             NodeValue::Subtext => self.format_subtext(entering)?,
+            NodeValue::DataviewField(_) => todo!(),
+            NodeValue::DataviewKey => todo!(),
+            NodeValue::DataviewValue => todo!(),
         };
         Ok(true)
     }

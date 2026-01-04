@@ -249,6 +249,13 @@ pub enum NodeValue {
     /// **Block**. Block scoped subscript that acts similar to a header.
     /// Enabled with `subtext` option.
     Subtext,
+
+    /// TODO:
+    DataviewField(DataviewFieldType),
+    /// TODO:
+    DataviewKey,
+    /// TODO:
+    DataviewValue,
 }
 
 /// Alignment of a single table cell.
@@ -582,6 +589,28 @@ impl AlertType {
     }
 }
 
+/// The type of dataview field type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DataviewFieldType {
+    /// TODO:
+    FullLine,
+    /// TODO:
+    Bracket,
+    /// TODO:
+    Parenthesis,
+}
+
+impl DataviewFieldType {
+    /// Returns the CSS class to use for an dataview field type
+    pub fn css_class(self) -> &'static str {
+        match self {
+            Self::FullLine => "dataview-field-full-line",
+            Self::Bracket => "dataview-field-bracket",
+            Self::Parenthesis => "dataview-field-parenthesis",
+        }
+    }
+}
+
 impl NodeValue {
     /// Indicates whether this node is a block node or inline node.
     pub fn block(&self) -> bool {
@@ -606,7 +635,10 @@ impl NodeValue {
             | NodeValue::TaskItem(..)
             | NodeValue::MultilineBlockQuote(_)
             | NodeValue::Alert(_)
-            | NodeValue::Subtext => true,
+            | NodeValue::Subtext
+            | NodeValue::DataviewField(_)
+            | NodeValue::DataviewKey
+            | NodeValue::DataviewValue => true,
             #[cfg(feature = "phoenix_heex")]
             NodeValue::HeexBlock(..) => true,
             _ => false,
@@ -621,6 +653,7 @@ impl NodeValue {
                 | NodeValue::Heading(..)
                 | NodeValue::TableCell
                 | NodeValue::Subtext
+                | NodeValue::DataviewField(_)
         )
     }
 
@@ -698,6 +731,9 @@ impl NodeValue {
             NodeValue::EscapedTag(_) => "escaped_tag",
             NodeValue::Alert(_) => "alert",
             NodeValue::Subtext => "subtext",
+            NodeValue::DataviewField(_) => "dataview_field",
+            NodeValue::DataviewKey => "dataview_key",
+            NodeValue::DataviewValue => "dataview_value",
         }
     }
 
@@ -969,11 +1005,14 @@ impl<'a> arena_tree::Node<'a, RefCell<Ast>> {
             | NodeValue::Underline
             | NodeValue::Subscript
             | NodeValue::Subtext
+            | NodeValue::DataviewKey
+            | NodeValue::DataviewValue
             // XXX: this is quite a hack: the EscapedTag _contains_ whatever was
             // possibly going to fall into the spoiler. This should be fixed in
             // inlines.
             | NodeValue::EscapedTag(_)
             => !child.block(),
+            NodeValue::DataviewField(_) => matches!(*child, NodeValue::DataviewKey | NodeValue::DataviewValue),
             NodeValue::Table(..) => matches!(*child, NodeValue::TableRow(..)),
             NodeValue::TableRow(..) => matches!(*child, NodeValue::TableCell),
             NodeValue::TableCell => {

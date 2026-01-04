@@ -12,6 +12,7 @@ mod cjk_friendly_emphasis;
 mod code;
 mod commonmark;
 mod core;
+mod dataview_field;
 mod description_lists;
 mod empty;
 mod escape;

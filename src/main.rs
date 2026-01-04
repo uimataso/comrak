@@ -198,6 +198,7 @@ enum Extension {
     Subtext,
     Highlight,
     PhoenixHeex,
+    DataviewField,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -288,7 +289,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         .cjk_friendly_emphasis(exts.contains(&Extension::CjkFriendlyEmphasis))
         .subtext(exts.contains(&Extension::Subtext))
         .highlight(exts.contains(&Extension::Highlight))
-        .phoenix_heex(exts.contains(&Extension::PhoenixHeex));
+        .phoenix_heex(exts.contains(&Extension::PhoenixHeex))
+        .dataview_field(exts.contains(&Extension::DataviewField));
 
     #[cfg(feature = "shortcodes")]
     let extension = extension.shortcodes(cli.gemoji);

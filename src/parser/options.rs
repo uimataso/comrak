@@ -557,6 +557,10 @@ pub struct Extension<'c> {
     /// ```
     #[cfg_attr(feature = "bon", builder(default))]
     pub phoenix_heex: bool,
+
+    /// TODO: add doc
+    #[cfg_attr(feature = "bon", builder(default))]
+    pub dataview_field: bool,
 }
 
 impl<'c> Extension<'c> {

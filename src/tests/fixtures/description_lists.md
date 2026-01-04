@@ -14,7 +14,7 @@ continuations.
 The list is tight if there is no blank line between
 the term and the first definition, otherwise loose.
 
-```````````````````````````````` example
+```example
 apple
 :   red fruit
 
@@ -27,11 +27,11 @@ orange
 <dt>orange</dt>
 <dd>orange fruit</dd>
 </dl>
-````````````````````````````````
+```
 
 Loose:
 
-```````````````````````````````` example
+```example
 apple
 
 :   red fruit
@@ -50,11 +50,11 @@ orange
 <p>orange fruit</p>
 </dd>
 </dl>
-````````````````````````````````
+```
 
 Indented marker:
 
-```````````````````````````````` example
+```example
 apple
   : red fruit
 
@@ -67,9 +67,9 @@ orange
 <dt>orange</dt>
 <dd>orange fruit</dd>
 </dl>
-````````````````````````````````
+```
 
-```````````````````````````````` example
+```example
 apple
 
  : red fruit
@@ -88,11 +88,11 @@ orange
 <p>orange fruit</p>
 </dd>
 </dl>
-````````````````````````````````
+```
 
 Multiple blocks in a definition:
 
-```````````````````````````````` example
+```example
 *apple*
 
 :   red fruit
@@ -125,11 +125,11 @@ crisp, pleasant to taste</p>
 </blockquote>
 </dd>
 </dl>
-````````````````````````````````
+```
 
 Nested lists:
 
-```````````````````````````````` example
+```example
 term
 
 :   1. Para one
@@ -147,11 +147,11 @@ term
 </ol>
 </dd>
 </dl>
-````````````````````````````````
+```
 
 Multiple definitions, tight:
 
-```````````````````````````````` example
+```example
 apple
 :   red fruit
 :   computer company
@@ -168,11 +168,11 @@ orange
 <dd>orange fruit</dd>
 <dd>telecom company</dd>
 </dl>
-````````````````````````````````
+```
 
 Multiple definitions, loose:
 
-```````````````````````````````` example
+```example
 apple
 
 :   red fruit
@@ -200,11 +200,11 @@ orange
 <p>telecom company</p>
 </dd>
 </dl>
-````````````````````````````````
+```
 
 Lazy line continuations:
 
-```````````````````````````````` example
+```example
 apple
 
 :   red fruit
@@ -236,13 +236,11 @@ fruit</p>
 <p>telecom company</p>
 </dd>
 </dl>
-````````````````````````````````
-
-
+```
 
 `~` may be used as a marker instead of `:`:
 
-```````````````````````````````` example
+```example
 apple
   ~ red fruit
 
@@ -255,11 +253,11 @@ orange
 <dt>orange</dt>
 <dd>orange fruit</dd>
 </dl>
-````````````````````````````````
+```
 
 Definition terms may span multiple lines:
 
-```````````````````````````````` example
+```example
 a
 b\
 c
@@ -274,12 +272,12 @@ c</dt>
 <p>foo</p>
 </dd>
 </dl>
-````````````````````````````````
+```
 
 Definition list with preceding paragraph
 (<https://github.com/jgm/commonmark-hs/issues/35>):
 
-```````````````````````````````` example
+```example
 Foo
 
 bar
@@ -295,4 +293,4 @@ bim
 <dt>bim</dt>
 <dd>bor</dd>
 </dl>
-````````````````````````````````
+```

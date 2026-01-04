@@ -158,6 +158,42 @@ const HEEX_INLINE: TestCase = (
 "#,
 );
 
+const DATAVIEW_FIELD: TestCase = (
+    &[
+        sourcepos!((1:7-1:19)),
+        sourcepos!((2:7-2:19)),
+        sourcepos!((3:1-3:23)),
+    ],
+    r#"hello [key:: value] world
+hello (key:: value) world
+hello key:: value world
+"#,
+);
+
+const DATAVIEW_KEY: TestCase = (
+    &[
+        sourcepos!((1:8-1:10)),
+        sourcepos!((2:8-2:10)),
+        sourcepos!((3:1-3:9)),
+    ],
+    r#"hello [key:: value] world
+hello (key:: value) world
+hello key:: value world
+"#,
+);
+
+const DATAVIEW_VALUE: TestCase = (
+    &[
+        sourcepos!((1:13-1:18)),
+        sourcepos!((2:13-2:18)),
+        sourcepos!((3:12-3:23)),
+    ],
+    r#"hello [key:: value] world
+hello (key:: value) world
+hello key:: value world
+"#,
+);
+
 const PARAGRAPH: TestCase = (
     &[sourcepos!((1:1-1:11)), sourcepos!((4:1-4:11))],
     r#"hello world
@@ -511,6 +547,9 @@ fn node_values() -> HashMap<NodeValueDiscriminants, TestCase> {
                 HeexBlock => HEEX_BLOCK,
                 #[cfg(feature = "phoenix_heex")]
                 HeexInline => HEEX_INLINE,
+                DataviewField => DATAVIEW_FIELD,
+                DataviewKey => DATAVIEW_KEY,
+                DataviewValue => DATAVIEW_VALUE,
             };
             (*v, text)
         })
@@ -545,6 +584,7 @@ fn sourcepos() {
     options.extension.spoiler = true;
     options.extension.alerts = true;
     options.extension.subtext = true;
+    options.extension.dataview_field = true;
     #[cfg(feature = "phoenix_heex")]
     {
         options.extension.phoenix_heex = true;

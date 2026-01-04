@@ -327,6 +327,9 @@ impl<'o, 'c> XmlFormatter<'o, 'c> {
                     }
                 }
                 NodeValue::Subtext => {}
+                NodeValue::DataviewField(_) => todo!(),
+                NodeValue::DataviewKey => todo!(),
+                NodeValue::DataviewValue => todo!(),
             }
 
             if node.first_child().is_some() {
