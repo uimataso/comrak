@@ -49,7 +49,7 @@ pub struct Subject<'a: 'd, 'r, 'o, 'd, 'c, 'p> {
     pub scanned_for_backticks: bool,
     no_link_openers: bool,
     dataview_field_marker: Option<DataviewFieldMarker<'a>>,
-    parentheses: Vec<Parenthesis<'a>>,
+    parentheses: SmallVec<[Parenthesis<'a>; 8]>,
     special_char_bytes: [bool; 256],
     skip_char_bytes: [bool; 256],
     emph_delim_bytes: [bool; 256],
@@ -94,7 +94,7 @@ impl<'a, 'r, 'o, 'd, 'c, 'p> Subject<'a, 'r, 'o, 'd, 'c, 'p> {
             scanned_for_backticks: false,
             no_link_openers: true,
             dataview_field_marker: None,
-            parentheses: vec![],
+            parentheses: SmallVec::new(),
             special_char_bytes: [false; 256],
             skip_char_bytes: [false; 256],
             emph_delim_bytes: [false; 256],
@@ -334,10 +334,7 @@ impl<'a, 'r, 'o, 'd, 'c, 'p> Subject<'a, 'r, 'o, 'd, 'c, 'p> {
                 );
 
                 if self.options.extension.dataview_field {
-                    self.parentheses.push(Parenthesis {
-                        inl_text: inl,
-                        position: self.scanner.pos,
-                    });
+                    self.parentheses.push(Parenthesis { inl_text: inl });
                 }
 
                 Some(inl)
@@ -1289,10 +1286,7 @@ impl<'a, 'r, 'o, 'd, 'c, 'p> Subject<'a, 'r, 'o, 'd, 'c, 'p> {
             );
 
             if self.dataview_field_marker.is_none() {
-                self.dataview_field_marker = Some(DataviewFieldMarker {
-                    inl,
-                    position: self.scanner.pos,
-                });
+                self.dataview_field_marker = Some(DataviewFieldMarker { inl });
             }
 
             Some(inl)
@@ -1828,9 +1822,12 @@ impl<'a, 'r, 'o, 'd, 'c, 'p> Subject<'a, 'r, 'o, 'd, 'c, 'p> {
         }
 
         if let Some(marker) = &self.dataview_field_marker {
-            if marker.inl.data().sourcepos.start.line == self.line
-                && last.inl_text.data().sourcepos.start.line == self.line
-                && last.position < marker.position
+            let marker_pos = marker.inl.data().sourcepos;
+            let last_pos = last.inl_text.data().sourcepos;
+
+            if marker_pos.start.line == self.line
+                && last_pos.start.line == self.line
+                && last_pos.start.column < marker_pos.start.column
             {
                 let last = self.brackets.pop().unwrap();
                 let marker = self.dataview_field_marker.take().unwrap();
@@ -2142,9 +2139,12 @@ impl<'a, 'r, 'o, 'd, 'c, 'p> Subject<'a, 'r, 'o, 'd, 'c, 'p> {
         };
 
         if let Some(marker) = &self.dataview_field_marker {
-            if marker.inl.data().sourcepos.start.line == self.line
-                && last.inl_text.data().sourcepos.start.line == self.line
-                && last.position < marker.position
+            let marker_pos = marker.inl.data().sourcepos;
+            let last_pos = last.inl_text.data().sourcepos;
+
+            if marker_pos.start.line == self.line
+                && last_pos.start.line == self.line
+                && last_pos.start.column < marker_pos.start.column
             {
                 let parenthesis = self.parentheses.pop().unwrap();
                 let marker = self.dataview_field_marker.take().unwrap();
@@ -2604,12 +2604,10 @@ struct WikilinkComponents {
 
 struct DataviewFieldMarker<'a> {
     inl: Node<'a>,
-    position: usize,
 }
 
 struct Parenthesis<'a> {
     inl_text: Node<'a>,
-    position: usize,
 }
 
 pub(crate) fn manual_scan_link_url(input: &str) -> Option<(&str, usize)> {
