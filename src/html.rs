@@ -19,7 +19,7 @@ use crate::ctype::isspace;
 #[cfg(feature = "shortcodes")]
 use crate::nodes::NodeShortCode;
 use crate::nodes::{
-    ListType, Node, NodeAlert, NodeCode, NodeCodeBlock, NodeFootnoteDefinition,
+    DataviewFieldType, ListType, Node, NodeAlert, NodeCode, NodeCodeBlock, NodeFootnoteDefinition,
     NodeFootnoteReference, NodeHeading, NodeHtmlBlock, NodeLink, NodeList, NodeMath, NodeTaskItem,
     NodeValue, NodeWikiLink, TableAlignment,
 };
@@ -397,6 +397,9 @@ pub fn format_node_default<T>(
         NodeValue::Underline => render_underline(context, node, entering),
         NodeValue::WikiLink(ref nwl) => render_wiki_link(context, node, entering, nwl),
         NodeValue::Subtext => render_subtext(context, node, entering),
+        NodeValue::DataviewField(ty) => render_dataview_field(context, node, entering, ty),
+        NodeValue::DataviewKey => render_dataview_key(context, node, entering),
+        NodeValue::DataviewValue => render_dataview_value(context, node, entering),
     }
 }
 
@@ -1487,6 +1490,57 @@ fn render_wiki_link<T>(
         context.write_str("\">")?;
     } else {
         context.write_str("</a>")?;
+    }
+
+    Ok(ChildRendering::HTML)
+}
+
+fn render_dataview_field<T>(
+    context: &mut Context<T>,
+    node: Node<'_>,
+    entering: bool,
+    field_type: DataviewFieldType,
+) -> Result<ChildRendering, fmt::Error> {
+    if entering {
+        context.write_str("<div")?;
+        render_sourcepos(context, node)?;
+        context.write_str(" class=\"dataview-field ")?;
+        context.write_str(field_type.css_class())?;
+        context.write_str("\">")?;
+    } else {
+        context.write_str("</div>")?;
+    }
+
+    Ok(ChildRendering::HTML)
+}
+
+fn render_dataview_key<T>(
+    context: &mut Context<T>,
+    node: Node<'_>,
+    entering: bool,
+) -> Result<ChildRendering, fmt::Error> {
+    if entering {
+        context.write_str("<span")?;
+        render_sourcepos(context, node)?;
+        context.write_str(" class=\"dataview-key\">")?;
+    } else {
+        context.write_str("</span>")?;
+    }
+
+    Ok(ChildRendering::HTML)
+}
+
+fn render_dataview_value<T>(
+    context: &mut Context<T>,
+    node: Node<'_>,
+    entering: bool,
+) -> Result<ChildRendering, fmt::Error> {
+    if entering {
+        context.write_str("<span")?;
+        render_sourcepos(context, node)?;
+        context.write_str(" class=\"dataview-value\">")?;
+    } else {
+        context.write_str("</span>")?;
     }
 
     Ok(ChildRendering::HTML)

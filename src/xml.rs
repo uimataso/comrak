@@ -327,6 +327,13 @@ impl<'o, 'c> XmlFormatter<'o, 'c> {
                     }
                 }
                 NodeValue::Subtext => {}
+                NodeValue::DataviewField(ty) => {
+                    self.output.write_str(" type=\"")?;
+                    self.output.write_str(ty.type_name())?;
+                    self.output.write_str("\"")?;
+                }
+                NodeValue::DataviewKey => {}
+                NodeValue::DataviewValue => {}
             }
 
             if node.first_child().is_some() {

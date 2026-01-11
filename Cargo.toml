@@ -110,3 +110,7 @@ required-features = [ "syntect" ]
 [[example]]
 name = "s-expr"
 required-features = [ "bon" ]
+
+[lints.clippy]
+useless_concat = "allow"
+unnecessary_map_or = "allow"

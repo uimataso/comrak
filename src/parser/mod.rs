@@ -2066,6 +2066,7 @@ where
         while subj.parse_inline(node, &mut node_data) {}
         subj.process_emphasis(0);
         subj.clear_brackets();
+        subj.clear_parentheses();
     }
 
     fn process_footnotes(&mut self) {

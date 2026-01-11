@@ -12,8 +12,8 @@ use smallvec::SmallVec;
 use crate::ctype::{isdigit, ispunct, isspace};
 use crate::entity;
 use crate::nodes::{
-    Ast, Node, NodeCode, NodeFootnoteDefinition, NodeFootnoteReference, NodeLink, NodeMath,
-    NodeValue, NodeWikiLink, Sourcepos,
+    Ast, DataviewFieldType, LineColumn, Node, NodeCode, NodeFootnoteDefinition,
+    NodeFootnoteReference, NodeLink, NodeMath, NodeValue, NodeWikiLink, Sourcepos,
 };
 use crate::parser::inlines::cjk::FlankingCheckHelper;
 use crate::parser::options::{BrokenLinkReference, WikiLinksMode};
@@ -48,6 +48,9 @@ pub struct Subject<'a: 'd, 'r, 'o, 'd, 'c, 'p> {
     pub backticks: [usize; MAXBACKTICKS + 1],
     pub scanned_for_backticks: bool,
     no_link_openers: bool,
+    line_start_pos: usize,
+    dataview_field_markers: DataviewFieldMarkers<'a>,
+    parentheses: SmallVec<[Parenthesis<'a>; 8]>,
     special_char_bytes: [bool; 256],
     skip_char_bytes: [bool; 256],
     emph_delim_bytes: [bool; 256],
@@ -91,6 +94,9 @@ impl<'a, 'r, 'o, 'd, 'c, 'p> Subject<'a, 'r, 'o, 'd, 'c, 'p> {
             backticks: [0; MAXBACKTICKS + 1],
             scanned_for_backticks: false,
             no_link_openers: true,
+            line_start_pos: 0,
+            dataview_field_markers: DataviewFieldMarkers::new(),
+            parentheses: SmallVec::new(),
             special_char_bytes: [false; 256],
             skip_char_bytes: [false; 256],
             emph_delim_bytes: [false; 256],
@@ -141,6 +147,11 @@ impl<'a, 'r, 'o, 'd, 'c, 'p> Subject<'a, 'r, 'o, 'd, 'c, 'p> {
         }
         for &b in b"*_" {
             s.emph_delim_bytes[b as usize] = true;
+        }
+        if options.extension.dataview_field {
+            s.special_char_bytes[b'(' as usize] = true;
+            s.special_char_bytes[b')' as usize] = true;
+            s.special_char_bytes[b':' as usize] = true;
         }
         s
     }
@@ -201,6 +212,10 @@ impl<'a, 'r, 'o, 'd, 'c, 'p> Subject<'a, 'r, 'o, 'd, 'c, 'p> {
 
     pub fn parse_inline(&mut self, node: Node<'a>, ast: &mut Ast) -> bool {
         let Some(b) = self.peek_byte() else {
+            if self.options.extension.dataview_field {
+                self.handle_dataview_end_of_line();
+            }
+
             return false;
         };
 
@@ -208,7 +223,13 @@ impl<'a, 'r, 'o, 'd, 'c, 'p> Subject<'a, 'r, 'o, 'd, 'c, 'p> {
         self.line_offset = ast.line_offsets[adjusted_line];
 
         let new_inl: Option<Node<'a>> = match b {
-            b'\r' | b'\n' => Some(self.handle_newline()),
+            b'\r' | b'\n' => {
+                if self.options.extension.dataview_field {
+                    self.handle_dataview_end_of_line();
+                }
+
+                Some(self.handle_newline())
+            }
             b'`' => Some(self.handle_backticks(&ast.line_offsets)),
             b'=' if self.options.extension.highlight => Some(self.handle_delim(b'=')),
             b'\\' => Some(self.handle_backslash()),
@@ -245,6 +266,13 @@ impl<'a, 'r, 'o, 'd, 'c, 'p> Subject<'a, 'r, 'o, 'd, 'c, 'p> {
                     res = self.handle_shortcodes_colon();
                 }
 
+                if res.is_none()
+                    && self.options.extension.dataview_field
+                    && self.peek_byte_n(1) == Some(b':')
+                {
+                    res = Some(self.handle_dataview_field_marker(node));
+                }
+
                 if res.is_none() {
                     self.scanner.pos += 1;
                     res = Some(self.make_inline(
@@ -278,7 +306,7 @@ impl<'a, 'r, 'o, 'd, 'c, 'p> Subject<'a, 'r, 'o, 'd, 'c, 'p> {
                 let mut wikilink_inl = None;
 
                 if self.options.extension.wikilinks().is_some()
-                    && !self.within_brackets
+                    && (!self.within_brackets || self.dataview_field_markers.bracket.is_some())
                     && self.peek_byte() == Some(b'[')
                 {
                     wikilink_inl = self.handle_wikilink();
@@ -302,6 +330,20 @@ impl<'a, 'r, 'o, 'd, 'c, 'p> Subject<'a, 'r, 'o, 'd, 'c, 'p> {
                 self.within_brackets = false;
                 self.handle_close_bracket()
             }
+            b'(' => {
+                self.scanner.pos += 1;
+                let inl = self.make_inline(
+                    NodeValue::Text("(".into()),
+                    self.scanner.pos - 1,
+                    self.scanner.pos - 1,
+                );
+                self.parentheses.push(Parenthesis {
+                    inl_text: inl,
+                    position: self.scanner.pos,
+                });
+                Some(inl)
+            }
+            b')' => self.handle_close_parenthesis(),
             b'!' => {
                 self.scanner.pos += 1;
                 if self.peek_byte() == Some(b'[') && self.peek_byte_n(1) != Some(b'^') {
@@ -407,6 +449,7 @@ impl<'a, 'r, 'o, 'd, 'c, 'p> Subject<'a, 'r, 'o, 'd, 'c, 'p> {
         };
         self.line += 1;
         self.column_offset = -(self.scanner.pos as isize);
+        self.line_start_pos = self.scanner.pos;
         self.skip_spaces();
         inl
     }
@@ -1131,6 +1174,7 @@ impl<'a, 'r, 'o, 'd, 'c, 'p> Subject<'a, 'r, 'o, 'd, 'c, 'p> {
         while subj.parse_inline(para_node, &mut para_node.data_mut()) {}
         subj.process_emphasis(0);
         subj.clear_brackets();
+        subj.clear_parentheses();
 
         // Check if the parsed content is empty or contains only whitespace
         // This handles whitespace-only content, null bytes, etc. generically
@@ -1224,6 +1268,182 @@ impl<'a, 'r, 'o, 'd, 'c, 'p> Subject<'a, 'r, 'o, 'd, 'c, 'p> {
                 self.scanner.pos - 1,
             )
         }
+    }
+
+    fn handle_dataview_field_marker(&mut self, node: Node<'a>) -> Node<'a> {
+        self.scanner.pos += 2;
+
+        let inl_marker = self.make_inline(
+            NodeValue::Text("::".into()),
+            self.scanner.pos - 2,
+            self.scanner.pos - 1,
+        );
+
+        let is_valid_dataview_key =
+            |s: &str| -> bool { !s.trim().is_empty() && !s.chars().any(|c| "[]()".contains(c)) };
+
+        let last_bracket = self
+            .brackets
+            .last()
+            .filter(|b| b.position >= self.line_start_pos);
+        let last_parenthesis = self
+            .parentheses
+            .last()
+            .filter(|p| p.position >= self.line_start_pos);
+
+        let marker_type = match (last_bracket, last_parenthesis) {
+            (None, None) => DataviewFieldType::FullLine,
+            (None, Some(_p)) => DataviewFieldType::Parenthesis,
+            (Some(_b), None) => DataviewFieldType::Bracket,
+            (Some(b), Some(p)) => {
+                if b.position < p.position {
+                    DataviewFieldType::Parenthesis
+                } else {
+                    DataviewFieldType::Bracket
+                }
+            }
+        };
+
+        match marker_type {
+            DataviewFieldType::FullLine => {
+                if self.dataview_field_markers.is_all_none() {
+                    if let Some(mut first_inl) = node.last_child() {
+                        while let Some(n) = first_inl.previous_sibling() {
+                            let nv = &n.data().value;
+                            if nv.block()
+                                || matches!(nv, NodeValue::SoftBreak | NodeValue::LineBreak)
+                            {
+                                break;
+                            }
+                            first_inl = n;
+                        }
+
+                        let key_str = &self.input[self.line_start_pos..self.scanner.pos - 2];
+
+                        if is_valid_dataview_key(key_str) {
+                            self.dataview_field_markers.full_line = Some(DataviewFieldMarker {
+                                inl_marker,
+                                inl_start: first_inl,
+                            });
+                        }
+                    }
+                }
+            }
+            DataviewFieldType::Parenthesis => {
+                if self.dataview_field_markers.parenthesis.is_none() {
+                    let p = last_parenthesis.unwrap();
+                    let key_str = &self.input.get(p.position..self.scanner.pos - 2);
+                    if key_str.map_or(false, is_valid_dataview_key) {
+                        self.dataview_field_markers.parenthesis = Some(DataviewFieldMarker {
+                            inl_marker,
+                            inl_start: p.inl_text,
+                        });
+                    }
+                }
+            }
+            DataviewFieldType::Bracket => {
+                if self.dataview_field_markers.bracket.is_none() {
+                    let b = last_bracket.unwrap();
+                    let key_str = &self.input.get(b.position..self.scanner.pos - 2);
+                    if key_str.map_or(false, is_valid_dataview_key) {
+                        self.dataview_field_markers.bracket = Some(DataviewFieldMarker {
+                            inl_marker,
+                            inl_start: b.inl_text,
+                        });
+                    }
+                }
+            }
+        }
+
+        inl_marker
+    }
+
+    fn handle_dataview_end_of_line(&mut self) {
+        let Some(marker) = self.dataview_field_markers.full_line.take() else {
+            self.dataview_field_markers.clear();
+            return;
+        };
+
+        self.handle_dataview_field_node(
+            marker.inl_start,
+            marker.inl_marker,
+            DataviewFieldType::FullLine,
+        );
+    }
+
+    fn handle_dataview_field_node(
+        &mut self,
+        start: Node<'a>,
+        marker: Node<'a>,
+        dataview_field_type: DataviewFieldType,
+    ) {
+        self.dataview_field_markers.clear();
+
+        let is_full_line = matches!(dataview_field_type, DataviewFieldType::FullLine);
+
+        let field_start_pos = start.data().sourcepos.start;
+        let field_end_pos: LineColumn = (
+            self.line,
+            usize::try_from(
+                self.scanner.pos as isize + self.column_offset + self.line_offset as isize,
+            )
+            .unwrap(),
+        )
+            .into();
+
+        let mut key_start_pos = field_start_pos;
+        if !is_full_line {
+            key_start_pos.column += 1;
+        }
+        let mut key_end_pos = marker.data().sourcepos.start;
+        key_end_pos.column -= 1;
+
+        let mut value_start_pos = marker.data().sourcepos.end;
+        value_start_pos.column += 1;
+        let mut value_end_pos = field_end_pos;
+        if !is_full_line {
+            value_end_pos.column -= 1;
+        }
+
+        let key_inl = make_inline(
+            self.arena,
+            NodeValue::DataviewKey,
+            (key_start_pos, key_end_pos).into(),
+        );
+        let value_inl = make_inline(
+            self.arena,
+            NodeValue::DataviewValue,
+            (value_start_pos, value_end_pos).into(),
+        );
+        let field_inl = make_inline(
+            self.arena,
+            NodeValue::DataviewField(dataview_field_type),
+            (field_start_pos, field_end_pos).into(),
+        );
+
+        start.insert_before(field_inl);
+
+        let mut itm = marker.next_sibling();
+        while let Some(it) = itm {
+            itm = it.next_sibling();
+            value_inl.append(it);
+        }
+        marker.detach();
+
+        let mut itm = if is_full_line {
+            Some(start)
+        } else {
+            start.next_sibling()
+        };
+        while let Some(it) = itm {
+            itm = it.next_sibling();
+            key_inl.append(it);
+        }
+        if !is_full_line {
+            start.detach();
+        }
+
+        field_inl.extend([key_inl, value_inl]);
     }
 
     /////////////////////////////////////
@@ -1641,6 +1861,20 @@ impl<'a, 'r, 'o, 'd, 'c, 'p> Subject<'a, 'r, 'o, 'd, 'c, 'p> {
             ));
         };
 
+        if self.options.extension.dataview_field {
+            if let Some(marker) = &self.dataview_field_markers.bracket {
+                if marker.inl_start.same_node(last.inl_text) {
+                    let _last = self.brackets.pop().unwrap();
+                    self.handle_dataview_field_node(
+                        marker.inl_start,
+                        marker.inl_marker,
+                        DataviewFieldType::Bracket,
+                    );
+                    return None;
+                }
+            }
+        }
+
         let is_image = last.image;
 
         if !is_image && self.no_link_openers {
@@ -1935,6 +2169,43 @@ impl<'a, 'r, 'o, 'd, 'c, 'p> Subject<'a, 'r, 'o, 'd, 'c, 'p> {
 
     pub fn clear_brackets(&mut self) {
         self.brackets.clear();
+    }
+
+    fn handle_close_parenthesis(&mut self) -> Option<Node<'a>> {
+        self.scanner.pos += 1;
+
+        let Some(last) = self.parentheses.last() else {
+            return Some(self.make_inline(
+                NodeValue::Text(")".into()),
+                self.scanner.pos - 1,
+                self.scanner.pos - 1,
+            ));
+        };
+
+        if self.options.extension.dataview_field {
+            if let Some(marker) = &self.dataview_field_markers.parenthesis {
+                if marker.inl_start.same_node(last.inl_text) {
+                    let _last = self.parentheses.pop().unwrap();
+                    self.handle_dataview_field_node(
+                        marker.inl_start,
+                        marker.inl_marker,
+                        DataviewFieldType::Parenthesis,
+                    );
+                    return None;
+                }
+            }
+        }
+
+        let _ = self.parentheses.pop().unwrap();
+        Some(self.make_inline(
+            NodeValue::Text(")".into()),
+            self.scanner.pos - 1,
+            self.scanner.pos - 1,
+        ))
+    }
+
+    pub fn clear_parentheses(&mut self) {
+        self.parentheses.clear();
     }
 
     ////////////////////
@@ -2368,10 +2639,44 @@ struct Bracket<'a> {
     bracket_after: bool,
 }
 
+struct Parenthesis<'a> {
+    inl_text: Node<'a>,
+    position: usize,
+}
+
 #[derive(Clone)]
 struct WikilinkComponents {
     url: String,
     link_label: Option<(String, usize, usize)>,
+}
+
+struct DataviewFieldMarkers<'a> {
+    full_line: Option<DataviewFieldMarker<'a>>,
+    bracket: Option<DataviewFieldMarker<'a>>,
+    parenthesis: Option<DataviewFieldMarker<'a>>,
+}
+
+struct DataviewFieldMarker<'a> {
+    inl_marker: Node<'a>,
+    inl_start: Node<'a>,
+}
+
+impl DataviewFieldMarkers<'_> {
+    const fn new() -> Self {
+        Self {
+            full_line: None,
+            bracket: None,
+            parenthesis: None,
+        }
+    }
+
+    const fn is_all_none(&self) -> bool {
+        self.full_line.is_none() && self.bracket.is_none() && self.parenthesis.is_none()
+    }
+
+    const fn clear(&mut self) {
+        *self = Self::new();
+    }
 }
 
 pub(crate) fn manual_scan_link_url(input: &str) -> Option<(&str, usize)> {

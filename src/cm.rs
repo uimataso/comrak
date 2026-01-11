@@ -5,8 +5,9 @@ use std::str;
 
 use crate::ctype::{isalpha, isdigit, ispunct, ispunct_char, isspace, isspace_char};
 use crate::nodes::{
-    ListDelimType, ListType, Node, NodeAlert, NodeCodeBlock, NodeHeading, NodeHtmlBlock, NodeLink,
-    NodeList, NodeMath, NodeTaskItem, NodeValue, NodeWikiLink, TableAlignment,
+    DataviewFieldType, ListDelimType, ListType, Node, NodeAlert, NodeCodeBlock, NodeHeading,
+    NodeHtmlBlock, NodeLink, NodeList, NodeMath, NodeTaskItem, NodeValue, NodeWikiLink,
+    TableAlignment,
 };
 use crate::parser::options::{Options, Plugins, WikiLinksMode};
 #[cfg(feature = "phoenix_heex")]
@@ -501,6 +502,9 @@ impl<'a, 'o, 'c, 'w> CommonMarkFormatter<'a, 'o, 'c, 'w> {
             NodeValue::EscapedTag(net) => self.format_escaped_tag(net)?,
             NodeValue::Alert(ref alert) => self.format_alert(alert, entering)?,
             NodeValue::Subtext => self.format_subtext(entering)?,
+            NodeValue::DataviewField(ty) => self.format_dataview_field(ty, entering)?,
+            NodeValue::DataviewKey => self.format_dataview_key(entering)?,
+            NodeValue::DataviewValue => {}
         };
         Ok(true)
     }
@@ -1110,6 +1114,34 @@ impl<'a, 'o, 'c, 'w> CommonMarkFormatter<'a, 'o, 'c, 'w> {
         } else {
             self.no_linebreaks = false;
             self.blankline();
+        }
+        Ok(())
+    }
+
+    fn format_dataview_field(
+        &mut self,
+        dataview_field_type: DataviewFieldType,
+        entering: bool,
+    ) -> fmt::Result {
+        if entering {
+            match dataview_field_type {
+                DataviewFieldType::FullLine => {}
+                DataviewFieldType::Bracket => write!(self, "[")?,
+                DataviewFieldType::Parenthesis => write!(self, "(")?,
+            }
+        } else {
+            match dataview_field_type {
+                DataviewFieldType::FullLine => {}
+                DataviewFieldType::Bracket => write!(self, "]")?,
+                DataviewFieldType::Parenthesis => write!(self, ")")?,
+            }
+        }
+        Ok(())
+    }
+
+    fn format_dataview_key(&mut self, entering: bool) -> fmt::Result {
+        if !entering {
+            write!(self, "::")?
         }
         Ok(())
     }
